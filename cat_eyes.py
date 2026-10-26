@@ -35,6 +35,10 @@ BLINK_S = 0.18
 # iris travel at full gaze, as a fraction of the eye's half-axes; at 1.0 the
 # pupil sits on the rim, so ~0.8 puts it right at the edge of the eye
 GAZE_RANGE = (0.80, 0.55)
+# how far the upper eyelid follows the iris vertically: 0 = lid stays put,
+# 1 = lid moves exactly as far as the iris; e.g. 0.5 lowers the lid by half
+# of the iris' downward travel (looking up just shows the full eye)
+UPPER_LID_FOLLOW = 0.5
 SHIFT = 4  # sub-pixel bits for cv2 drawing, keeps slow gaze motion smooth
 ONE = 1 << SHIFT
 
@@ -113,11 +117,14 @@ class CatEyes:
         # visible eye = eye shape minus upper and lower lids; they meet at 0.3*ry when closed
         mask = np.zeros((size, size), np.uint8)
         cv2.ellipse(mask, c, (rx, ry), tilt, 0, 360, 255, -1, cv2.LINE_AA)
-        lid_axes = (int(rx * 1.15), ry)
-        upper = (c[0], int(c[1] - (0.7 + 1.3 * openness) * ry))
-        lower = (c[0], int(c[1] + (1.3 + 0.7 * openness) * ry))
-        cv2.ellipse(mask, upper, lid_axes, tilt, 0, 360, 0, -1, cv2.LINE_AA)
-        cv2.ellipse(mask, lower, lid_axes, tilt, 0, 360, 0, -1, cv2.LINE_AA)
+        # the upper lid droops with a downward gaze; scaled by openness so a
+        # blink still closes at the same spot
+        lid_follow = UPPER_LID_FOLLOW * max(iy - c[1], 0.0) * openness
+        lid_axes = fp(rx * 1.15, ry)
+        upper = fp(c[0], c[1] - (0.7 + 1.3 * openness) * ry + lid_follow)
+        lower = fp(c[0], c[1] + (1.3 + 0.7 * openness) * ry)
+        cv2.ellipse(mask, upper, lid_axes, tilt, 0, 360, 0, -1, cv2.LINE_AA, SHIFT)
+        cv2.ellipse(mask, lower, lid_axes, tilt, 0, 360, 0, -1, cv2.LINE_AA, SHIFT)
 
         x0, y0 = center[0] - half, center[1] - half
         roi = canvas[y0:y0 + size, x0:x0 + size].astype(np.float32)
