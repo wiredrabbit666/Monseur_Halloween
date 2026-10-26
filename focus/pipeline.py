@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 from ultralytics import YOLO
 
@@ -76,19 +77,43 @@ class FocusTracker:
 
     def __init__(self, cfg=None):
         self.cfg = cfg or FocusConfig()
-        self.model = YOLO(self.cfg.model)
+        self.model = None
         self.tracks = {}
         self.primary_id = None
         self.f_px = None
         self.last_result = None
 
+    def _ensure_model(self):
+        if self.model is not None:
+            return self.model
+
+        model_name = self.cfg.model
+        if not model_name:
+            raise ValueError("A YOLO model path is required")
+
+        candidate = Path(model_name)
+        if not candidate.is_absolute() and not candidate.exists():
+            repo_root = Path(__file__).resolve().parents[1]
+            for alt in (repo_root / model_name, repo_root / "weights" / model_name):
+                if alt.exists():
+                    candidate = alt
+                    break
+        self.model = YOLO(str(candidate if candidate.exists() else model_name))
+        return self.model
+
     def process(self, frame, t):
+        if frame is None:
+            return []
+        try:
+            h, w = frame.shape[:2]
+        except (AttributeError, TypeError, ValueError):
+            return []
         cfg = self.cfg
-        h, w = frame.shape[:2]
         if self.f_px is None:
             self.f_px = (w / 2) / math.tan(math.radians(cfg.hfov_deg) / 2)
 
-        r = self.model.track(
+        model = self._ensure_model()
+        r = model.track(
             frame, persist=True, tracker=cfg.tracker, imgsz=cfg.imgsz,
             conf=cfg.det_conf, verbose=False,
         )[0]

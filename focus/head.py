@@ -30,6 +30,9 @@ def head_from_keypoints(xy, conf, cfg):
       eyes - eye to eye; small in pixels, so noisiest
     Returns None when there are no usable head keypoints.
     """
+    if xy is None or conf is None or len(xy) == 0:
+        return None
+
     vis = conf >= cfg.kp_conf
     head = [i for i in HEAD_POINTS if vis[i]]
     if not head:
@@ -47,6 +50,6 @@ def head_from_keypoints(xy, conf, cfg):
     else:
         return None
 
-    if size < cfg.min_size_px:
+    if not math.isfinite(size) or size < cfg.min_size_px:
         return None
     return HeadObservation(cx, cy, size, length, cue, std)
