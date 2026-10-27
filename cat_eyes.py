@@ -54,6 +54,9 @@ IRIS_SIZE = 1
 # pupil half-axes (x, y) relative to the iris radius; x multiplies the slit
 # width, which narrows from 0.45 to ~0.08 as focus rises
 PUPIL_SIZE = (.9, 0.68)
+# pupil outline, pointed at top and bottom: 1 = lens with straight-ish tapering
+# sides; < 1 bulges near the tips (gothic arch), > 1 pinches them (spindle)
+PUPIL_CURVE = 1.0
 SHIFT = 4  # sub-pixel bits for cv2 drawing, keeps slow gaze motion smooth
 ONE = 1 << SHIFT
 
@@ -141,7 +144,11 @@ class CatEyes:
         ix, iy = c[0] + gaze[0] * rx * GAZE_RANGE[0], c[1] + gaze[1] * ry * GAZE_RANGE[1]
         blend(layer, self.iris, self.iris_a, ix, iy)
         pw = max(2.0, r * pupil * PUPIL_SIZE[0])
-        cv2.ellipse(layer, fp(ix, iy), fp(pw, r * PUPIL_SIZE[1]), 0, 0, 360, PUPIL, -1, cv2.LINE_AA, SHIFT)
+        t = np.linspace(-1, 1, 61)
+        side = pw * (1 - t * t) ** PUPIL_CURVE
+        outline = np.concatenate([np.stack([ix + side, iy + t * r * PUPIL_SIZE[1]], 1),
+                                  np.stack([ix - side, iy + t * r * PUPIL_SIZE[1]], 1)[::-1]])
+        cv2.fillPoly(layer, [np.round(outline * ONE).astype(np.int32)], PUPIL, cv2.LINE_AA, SHIFT)
         # the eyeball ends short of the lid corners, leaving dark triangles
         ball = np.zeros((size, size), np.uint8)
         cv2.ellipse(ball, c, (int(rx * EYEBALL[0]), int(ry * EYEBALL[1])), tilt, 0, 360, 255, -1,
