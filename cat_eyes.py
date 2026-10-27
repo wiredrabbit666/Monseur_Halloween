@@ -50,7 +50,10 @@ EYE_HEIGHT = (0.8, 0.8)
 # dark triangle shows at each corner
 EYEBALL = (0.84, 1.05)
 # iris radius as a fraction of ry; the pupil slit scales with it
-IRIS_SIZE = 0.7
+IRIS_SIZE = 1
+# pupil half-axes (x, y) relative to the iris radius; x multiplies the slit
+# width, which narrows from 0.45 to ~0.08 as focus rises
+PUPIL_SIZE = (.9, 0.68)
 SHIFT = 4  # sub-pixel bits for cv2 drawing, keeps slow gaze motion smooth
 ONE = 1 << SHIFT
 
@@ -137,8 +140,8 @@ class CatEyes:
         layer = np.full((size, size, 3), SCLERA, np.uint8)
         ix, iy = c[0] + gaze[0] * rx * GAZE_RANGE[0], c[1] + gaze[1] * ry * GAZE_RANGE[1]
         blend(layer, self.iris, self.iris_a, ix, iy)
-        pw = max(2.0, r * pupil)
-        cv2.ellipse(layer, fp(ix, iy), fp(pw, r * 0.88), 0, 0, 360, PUPIL, -1, cv2.LINE_AA, SHIFT)
+        pw = max(2.0, r * pupil * PUPIL_SIZE[0])
+        cv2.ellipse(layer, fp(ix, iy), fp(pw, r * PUPIL_SIZE[1]), 0, 0, 360, PUPIL, -1, cv2.LINE_AA, SHIFT)
         # the eyeball ends short of the lid corners, leaving dark triangles
         ball = np.zeros((size, size), np.uint8)
         cv2.ellipse(ball, c, (int(rx * EYEBALL[0]), int(ry * EYEBALL[1])), tilt, 0, 360, 255, -1,
