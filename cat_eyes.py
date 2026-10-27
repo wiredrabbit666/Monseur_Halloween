@@ -21,16 +21,21 @@ from focus.overlay import draw_points
 WINDOW = "cat eyes"
 FUR = (18, 16, 22)
 RIM = (6, 6, 8)
-SCLERA = (30, 85, 70)
+SCLERA = (12, 10, 75)
 PUPIL = (6, 6, 6)
 CORNER = (8, 6, 34)  # shadowed corners of the eye where the eyeball ends
-# radial iris colors (BGR): amber around the pupil, yellow-green, dark rim
+# IRIS_STOPS: radial iris colors (BGR): yellow around the pupil, green, red, dark rim
+# Each entry is a distance from the center (0 is the middle, 1 is the rim) and a color. 
+# Note that colors are written blue, green, red, not the usual red, green, blue.
+# To make the green and yellow cover more or less of the iris,
+# move the distances of the green (0.50) and red (0.72) entrie
 IRIS_STOPS = [
-    (0.00, (20, 150, 235)),
-    (0.35, (30, 170, 230)),
-    (0.70, (40, 205, 175)),
-    (0.92, (30, 140, 90)),
-    (1.00, (10, 50, 35)),
+    (0.00, (30, 215, 245)),
+    (0.30, (35, 205, 200)),
+    (0.50, (45, 175, 70)),
+    (0.72, (30, 60, 200)),
+    (0.92, (20, 20, 170)),
+    (1.00, (10, 8, 50)),
 ]
 BLINK_S = 0.18
 # iris travel at full gaze, as a fraction of the eye's half-axes; at 1.0 the
