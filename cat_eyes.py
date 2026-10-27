@@ -20,7 +20,8 @@ from focus import Camera, FocusConfig, FocusTracker
 from focus.overlay import draw_points
 
 WINDOW = "M. Halloween - D. Hanisko"
-FUR = (18, 16, 22)
+# FUR = (18, 16, 22) # dark purple grey background
+FUR = (0, 0, 0) # black ground
 RIM = (6, 6, 8)
 SCLERA = (12, 10, 75)
 PUPIL = (6, 6, 6)
