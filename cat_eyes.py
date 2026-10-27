@@ -23,6 +23,7 @@ FUR = (18, 16, 22)
 RIM = (6, 6, 8)
 SCLERA = (30, 85, 70)
 PUPIL = (6, 6, 6)
+CORNER = (8, 6, 34)  # shadowed corners of the eye where the eyeball ends
 # radial iris colors (BGR): amber around the pupil, yellow-green, dark rim
 IRIS_STOPS = [
     (0.00, (20, 150, 235)),
@@ -38,7 +39,14 @@ GAZE_RANGE = (0.80, 0.55)
 # how far the upper eyelid follows the iris vertically: 0 = lid stays put,
 # 1 = lid moves exactly as far as the iris; e.g. 0.5 lowers the lid by half
 # of the iris' downward travel (looking up just shows the full eye)
-UPPER_LID_FOLLOW = 0.5
+UPPER_LID_FOLLOW = 0.8
+# eye opening: lids meet in pointed corners at EYE_WIDTH * rx from the center;
+# LID_CURVE < 1 makes the lids fuller, > 1 more pointed
+EYE_WIDTH = 1.08
+LID_CURVE = 0.8
+# eyeball half-axes as fractions of (rx, ry); narrower than the opening so a
+# dark triangle shows at each corner
+EYEBALL = (0.84, 1.05)
 SHIFT = 4  # sub-pixel bits for cv2 drawing, keeps slow gaze motion smooth
 ONE = 1 << SHIFT
 
@@ -102,9 +110,23 @@ class CatEyes:
             self._eye(canvas, center, tilt, gaze, pupil, openness)
         return canvas
 
+    def _lids(self, c, tilt, upper, lower):
+        """Upper and lower lid curves as fixed-point polylines (corner to corner);
+        upper/lower are the lids' signed offsets from c at the middle of the eye."""
+        t = np.linspace(-1, 1, 61)
+        prof = (1 - t * t) ** LID_CURVE
+        x = t * self.rx * EYE_WIDTH
+        a = math.radians(tilt)
+        rot = np.array([[math.cos(a), -math.sin(a)], [math.sin(a), math.cos(a)]])
+        curves = []
+        for off in (upper, lower):
+            pts = np.stack([x, off * prof], 1) @ rot.T + c
+            curves.append(np.round(pts * ONE).astype(np.int32))
+        return curves
+
     def _eye(self, canvas, center, tilt, gaze, pupil, openness):
         rx, ry, r = self.rx, self.ry, self.iris_r
-        half = rx + self.pad
+        half = int(rx * EYE_WIDTH) + self.pad
         size = 2 * half
         c = (half, half)
 
@@ -113,24 +135,29 @@ class CatEyes:
         blend(layer, self.iris, self.iris_a, ix, iy)
         pw = max(2.0, r * pupil)
         cv2.ellipse(layer, fp(ix, iy), fp(pw, r * 0.88), 0, 0, 360, PUPIL, -1, cv2.LINE_AA, SHIFT)
+        # the eyeball ends short of the lid corners, leaving dark triangles
+        ball = np.zeros((size, size), np.uint8)
+        cv2.ellipse(ball, c, (int(rx * EYEBALL[0]), int(ry * EYEBALL[1])), tilt, 0, 360, 255, -1,
+                    cv2.LINE_AA)
+        b = (ball.astype(np.float32) / 255)[..., None]
+        layer = layer * b + np.array(CORNER, np.float32) * (1 - b)
 
-        # visible eye = eye shape minus upper and lower lids; they meet at 0.3*ry when closed
-        mask = np.zeros((size, size), np.uint8)
-        cv2.ellipse(mask, c, (rx, ry), tilt, 0, 360, 255, -1, cv2.LINE_AA)
-        # the upper lid droops with a downward gaze; scaled by openness so a
-        # blink still closes at the same spot
+        # lids meet 0.3*ry below center when closed; the upper lid droops with
+        # a downward gaze, scaled by openness so a blink still closes there
         lid_follow = UPPER_LID_FOLLOW * max(iy - c[1], 0.0) * openness
-        lid_axes = fp(rx * 1.15, ry)
-        upper = fp(c[0], c[1] - (0.7 + 1.3 * openness) * ry + lid_follow)
-        lower = fp(c[0], c[1] + (1.3 + 0.7 * openness) * ry)
-        cv2.ellipse(mask, upper, lid_axes, tilt, 0, 360, 0, -1, cv2.LINE_AA, SHIFT)
-        cv2.ellipse(mask, lower, lid_axes, tilt, 0, 360, 0, -1, cv2.LINE_AA, SHIFT)
+        upper = (0.3 - 1.3 * openness) * ry + lid_follow
+        lower = (0.3 + 0.7 * openness) * ry
+        up, low = self._lids(c, tilt, upper, lower)
+        mask = np.zeros((size, size), np.uint8)
+        cv2.fillPoly(mask, [np.concatenate([up, low[::-1]])], 255, cv2.LINE_AA, SHIFT)
 
         x0, y0 = center[0] - half, center[1] - half
         roi = canvas[y0:y0 + size, x0:x0 + size].astype(np.float32)
         a = (mask.astype(np.float32) / 255)[..., None]
         canvas[y0:y0 + size, x0:x0 + size] = (roi * (1 - a) + layer * a).astype(np.uint8)
-        cv2.ellipse(canvas, center, (rx, ry), tilt, 0, 360, RIM, max(3, rx // 25), cv2.LINE_AA)
+        offset = np.array([x0, y0], np.int32) * ONE
+        cv2.polylines(canvas, [up + offset, low + offset], False, RIM, max(3, rx // 25),
+                      cv2.LINE_AA, SHIFT)
 
 
 class FocusWorker(threading.Thread):
