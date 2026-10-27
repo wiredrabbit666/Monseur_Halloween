@@ -1,0 +1,5 @@
+# NVIDIA GPU install: CUDA builds of PyTorch, then everything in requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+-r requirements.txt

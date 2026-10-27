@@ -13,6 +13,7 @@ from .scoring import importance
 class FocusConfig:
     # model / detection
     model: str = "yolo26n-pose.pt"
+    device: str | None = None  # "cpu", "0" for the first CUDA GPU; None picks the GPU if usable
     tracker: str = "bytetrack.yaml"
     imgsz: int = 640
     det_conf: float = 0.4
@@ -115,7 +116,7 @@ class FocusTracker:
         model = self._ensure_model()
         r = model.track(
             frame, persist=True, tracker=cfg.tracker, imgsz=cfg.imgsz,
-            conf=cfg.det_conf, verbose=False,
+            conf=cfg.det_conf, device=cfg.device, verbose=False,
         )[0]
         self.last_result = r
 

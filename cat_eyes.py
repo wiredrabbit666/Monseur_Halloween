@@ -248,6 +248,9 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--camera", type=int, default=0)
     p.add_argument("--model", default="yolo26n-pose.pt")
+    # CPU by default: CUDA on the dGPU blacks out the KVM monitor attached to it
+    p.add_argument("--device", default="cpu", type=lambda s: "0" if s.lower() == "gpu" else s.lower(),
+                   help='"cpu" (default), "gpu" for the first NVIDIA GPU, or a CUDA index such as "1"')
     p.add_argument("--alpha", type=float, default=1.0)
     p.add_argument("--beta", type=float, default=1.0)
     p.add_argument("--width", type=int, default=1280)
@@ -278,9 +281,21 @@ def set_fullscreen(on):
                           cv2.WINDOW_FULLSCREEN if on else cv2.WINDOW_NORMAL)
 
 
+def pick_device(device):
+    """Fall back to the CPU when the requested CUDA GPU isn't usable."""
+    if device == "cpu":
+        return device
+    import torch
+    if device.isdigit() and int(device) < torch.cuda.device_count():
+        return device
+    print(f'GPU "{device}" not available (no NVIDIA GPU or CPU-only PyTorch); running on CPU')
+    return "cpu"
+
+
 def main():
     args = parse_args()
-    cfg = FocusConfig(model=args.model, alpha=args.alpha, beta=args.beta)
+    args.device = pick_device(args.device)
+    cfg = FocusConfig(model=args.model, device=args.device, alpha=args.alpha, beta=args.beta)
     camera = Camera(args.camera)
     worker = FocusWorker(camera, FocusTracker(cfg))
     worker.start()
