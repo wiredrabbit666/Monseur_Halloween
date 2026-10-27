@@ -3,7 +3,8 @@
 Pupils narrow to a slit as the target's importance rises and open wide
 when nobody is in focus; the eyes blink now and then and wander when idle.
 
-Keys: q/Esc quit, f fullscreen, v camera preview, m mirror gaze.
+Starts fullscreen. Keys: q quit, Esc leave fullscreen (quit when windowed),
+f toggle fullscreen, v camera preview, m mirror gaze.
 """
 
 import argparse
@@ -18,7 +19,7 @@ import numpy as np
 from focus import Camera, FocusConfig, FocusTracker
 from focus.overlay import draw_points
 
-WINDOW = "cat eyes"
+WINDOW = "M. Halloween - D. Hanisko"
 FUR = (18, 16, 22)
 RIM = (6, 6, 8)
 SCLERA = (12, 10, 75)
@@ -253,7 +254,27 @@ def parse_args():
     p.add_argument("--vgain", type=float, default=0.8, help="vertical gaze gain")
     p.add_argument("--no-mirror", action="store_true",
                    help="don't flip horizontally (eyes look toward the person by default)")
+    p.add_argument("--windowed", action="store_true", help="start in a window, not fullscreen")
     return p.parse_args()
+
+
+def dark_title_bar(title):
+    """Make a Windows title bar dark instead of white; no-op elsewhere."""
+    try:
+        import ctypes
+        hwnd = ctypes.windll.user32.FindWindowW(None, title)
+        on = ctypes.c_int(1)
+        for attr in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE, and its pre-20H1 id
+            if ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, attr, ctypes.byref(on), ctypes.sizeof(on)) == 0:
+                break
+    except (AttributeError, OSError):
+        pass
+
+
+def set_fullscreen(on):
+    cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN,
+                          cv2.WINDOW_FULLSCREEN if on else cv2.WINDOW_NORMAL)
 
 
 def main():
@@ -265,9 +286,11 @@ def main():
     eyes = CatEyes(args.width, args.height)
 
     cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    dark_title_bar(WINDOW)
     cv2.resizeWindow(WINDOW, args.width, args.height)
 
-    mirror, show_cam, fullscreen = not args.no_mirror, False, False
+    mirror, show_cam, fullscreen = not args.no_mirror, False, not args.windowed
+    set_fullscreen(fullscreen)
     gaze = np.zeros(2)
     pupil = 0.45
     idle_target, next_wander = np.zeros(2), 0.0
@@ -317,16 +340,19 @@ def main():
 
             spent = time.monotonic() - now
             key = cv2.waitKey(max(1, int((1 / 60 - spent) * 1000))) & 0xFF
-            if key in (ord("q"), 27) or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
+            if (key == ord("q") or (key == 27 and not fullscreen)
+                    or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1):
                 break
+            if key == 27:
+                fullscreen = False
+                set_fullscreen(False)
             if key == ord("v"):
                 show_cam = not show_cam
             if key == ord("m"):
                 mirror = not mirror
             if key == ord("f"):
                 fullscreen = not fullscreen
-                cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN,
-                                      cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL)
+                set_fullscreen(fullscreen)
     finally:
         worker.running = False
         worker.join(timeout=2.0)
