@@ -6,13 +6,16 @@ The pupils narrow to slits as someone gets closer or walks toward the camera, th
 
 It works by running a small, ready-made AI model (`yolo26n-pose.pt`, included in this repo) that finds people and their body positions in each webcam frame. You don't need to know anything about AI or train anything; the model is used as-is.
 
-Eventually I'll add more functionality.
+Eventually I'll add more functionality and make it friendly for non-python peoples.
 
 ## What you need
 
-- A Windows PC with a webcam (macOS and Linux should also work; see the notes in each step)
-- About 3 GB of free disk space (the AI libraries are large)
-- Optional: an NVIDIA graphics card makes it run faster, but it is not required
+- A Windows PC with a webcam (macOS and Linux should also work but I've not tested them; see the notes in each step)
+- A processor with 4 or more cores from the last 5–6 years. Older ones work too; the eyes just
+  react a little later.
+- 8 GB of memory recommended (the app itself uses about 1–2 GB)
+- About 1 GB of free disk space, or 3.5 GB for the NVIDIA install (the AI libraries are large)
+- Optional: an NVIDIA graphics card takes load off the processor, but it is not required; the eyes run smoothly without one.  I have problems with 4K multi-screen and MSI KVM using GPU.
 
 ## Step 1: Install Python
 
@@ -28,8 +31,7 @@ Eventually I'll add more functionality.
 
 ## Step 2: Get the code
 
-Either download it: on the GitHub page click the green **Code** button, then **Download ZIP**, and
-unzip it somewhere such as your Documents folder.
+Either download it: on the GitHub page click the green **Code** button, then **Download ZIP**, and unzip it somewhere such as your Documents folder.
 
 Or, if you have Git installed:
 
