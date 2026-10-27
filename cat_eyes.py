@@ -49,6 +49,8 @@ EYE_HEIGHT = (0.8, 0.8)
 # eyeball half-axes as fractions of (rx, ry); narrower than the opening so a
 # dark triangle shows at each corner
 EYEBALL = (0.84, 1.05)
+# iris radius as a fraction of ry; the pupil slit scales with it
+IRIS_SIZE = 0.7
 SHIFT = 4  # sub-pixel bits for cv2 drawing, keeps slow gaze motion smooth
 ONE = 1 << SHIFT
 
@@ -98,7 +100,7 @@ class CatEyes:
         self.w, self.h = width, height
         self.rx = int(width * 0.16)
         self.ry = int(self.rx * 0.82)
-        self.iris_r = self.ry
+        self.iris_r = int(self.ry * IRIS_SIZE)
         self.pad = 12
         self.eyes = [((int(width * 0.3), int(height * 0.5)), 12),
                      ((int(width * 0.7), int(height * 0.5)), -12)]
