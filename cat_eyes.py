@@ -35,7 +35,7 @@ IRIS_STOPS = [
 BLINK_S = 0.18
 # iris travel at full gaze, as a fraction of the eye's half-axes; at 1.0 the
 # pupil sits on the rim, so ~0.8 puts it right at the edge of the eye
-GAZE_RANGE = (0.80, 0.55)
+GAZE_RANGE = (0.90, 0.85)
 # how far the upper eyelid follows the iris vertically: 0 = lid stays put,
 # 1 = lid moves exactly as far as the iris; e.g. 0.5 lowers the lid by half
 # of the iris' downward travel (looking up just shows the full eye)
@@ -44,6 +44,8 @@ UPPER_LID_FOLLOW = 0.8
 # LID_CURVE < 1 makes the lids fuller, > 1 more pointed
 EYE_WIDTH = 1.08
 LID_CURVE = 0.8
+# open lids' distance above / below center as fractions of ry
+EYE_HEIGHT = (0.8, 0.8)
 # eyeball half-axes as fractions of (rx, ry); narrower than the opening so a
 # dark triangle shows at each corner
 EYEBALL = (0.84, 1.05)
@@ -145,8 +147,8 @@ class CatEyes:
         # lids meet 0.3*ry below center when closed; the upper lid droops with
         # a downward gaze, scaled by openness so a blink still closes there
         lid_follow = UPPER_LID_FOLLOW * max(iy - c[1], 0.0) * openness
-        upper = (0.3 - 1.3 * openness) * ry + lid_follow
-        lower = (0.3 + 0.7 * openness) * ry
+        upper = (0.3 - (0.3 + EYE_HEIGHT[0]) * openness) * ry + lid_follow
+        lower = (0.3 + (EYE_HEIGHT[1] - 0.3) * openness) * ry
         up, low = self._lids(c, tilt, upper, lower)
         mask = np.zeros((size, size), np.uint8)
         cv2.fillPoly(mask, [np.concatenate([up, low[::-1]])], 255, cv2.LINE_AA, SHIFT)
