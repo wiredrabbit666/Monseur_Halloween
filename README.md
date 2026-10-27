@@ -143,3 +143,11 @@ then press `f`.
 
 `run_demo.py` shows the raw tracking: every detected person with their importance score, plus
 sliders to tune it. The tracking code lives in the `focus/` folder.
+
+## Possible future improvements
+
+Ideas for using less processor time, with little or no visible difference:
+
+- Cap detection at about 10–15 updates per second. Gaze following doesn't need 30.
+- Limit PyTorch to 2–4 threads with `torch.set_num_threads`.
+- Run detection on smaller images, 480 instead of 640. It's a little less accurate at a distance.
