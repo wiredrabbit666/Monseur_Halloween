@@ -62,6 +62,9 @@ PUPIL_SIZE = (.9, 0.68)
 # pupil outline, pointed at top and bottom: 1 = lens with straight-ish tapering
 # sides; < 1 bulges near the tips (gothic arch), > 1 pinches them (spindle)
 PUPIL_CURVE = 1.0
+# the iris streaks converge on the pupil's outline, so the iris is pre-rendered
+# for each pupil width in steps of this fraction of the iris radius
+IRIS_STREAK_STEP = 0.01
 SHIFT = 4  # sub-pixel bits for cv2 drawing, keeps slow gaze motion smooth
 ONE = 1 << SHIFT
 
@@ -71,8 +74,29 @@ def smooth(current, target, dt, tau):
     return current + (target - current) * (1 - math.exp(-dt / tau))
 
 
-def make_iris(r, seed=7):
-    """Pre-render the iris: radial gradient with fine radial streaks."""
+def streak_angle(xx, yy, r, pw, ph):
+    """Angle in [0, 1) around the iris of the streak through each pixel. The
+    streak at angle a runs straight from the rim point at a to the pupil outline
+    point at height fraction t = a / 90 deg, with the pupil's half-width pw and
+    half-height ph; equal arcs of the rim map to equal heights of the pupil."""
+    ax = np.abs(xx)
+    lo, hi = np.full(xx.shape, -math.pi / 2), np.full(xx.shape, math.pi / 2)
+    for _ in range(22):  # bisect on a; height along a streak grows with a
+        a = (lo + hi) / 2
+        t = a * (2 / math.pi)
+        w = pw * (1 - t * t) ** PUPIL_CURVE
+        s = (ax - w) / np.maximum(r * np.cos(a) - w, 1e-6)
+        above = ph * t + s * (r * np.sin(a) - ph * t) > yy
+        hi = np.where(above, a, hi)
+        lo = np.where(above, lo, a)
+    a = (lo + hi) / 2
+    a = np.where(xx < 0, math.pi - a, a)
+    return (a + math.pi / 2) / (2 * math.pi)
+
+
+def make_iris(r, pw, ph, seed=7):
+    """Pre-render the iris: radial gradient with fine streaks that converge on
+    the pupil outline (see streak_angle)."""
     rng = np.random.default_rng(seed)
     yy, xx = np.mgrid[-r:r + 1, -r:r + 1].astype(np.float32)
     rho = np.hypot(xx, yy) / r
@@ -80,12 +104,12 @@ def make_iris(r, seed=7):
     img = np.stack(
         [np.interp(rho, stops, [c[ch] for _, c in IRIS_STOPS]) for ch in range(3)], axis=-1
     )
-    theta = (np.arctan2(yy, xx) + math.pi) / (2 * math.pi)
+    theta = streak_angle(xx, yy, r, pw, ph)
     noise = rng.uniform(0.82, 1.12, 240)
     streaks = np.interp(theta * len(noise), np.arange(len(noise) + 1), np.append(noise, noise[0]))
     img *= streaks[..., None]
     alpha = np.clip(r - rho * r + 0.5, 0, 1)[..., None]
-    return np.clip(img, 0, 255).astype(np.float32), alpha.astype(np.float32)
+    return np.clip(img, 0, 255).astype(np.uint8), alpha.astype(np.float32)
 
 
 def blend(dst, src, alpha, cx, cy):
@@ -115,7 +139,20 @@ class CatEyes:
         self.pad = 12
         self.eyes = [((int(width * 0.3), int(height * 0.5)), 12),
                      ((int(width * 0.7), int(height * 0.5)), -12)]
-        self.iris, self.iris_a = make_iris(self.iris_r)
+        self._irises = {}
+        # pre-render the slit's full range (0.08..0.45, see main) so pupil
+        # changes don't stutter; ~40 ms per width
+        for pupil in np.arange(0.08, 0.455, IRIS_STREAK_STEP):
+            self._iris(max(2.0, self.iris_r * pupil * PUPIL_SIZE[0]))
+
+    def _iris(self, pw):
+        """Iris image whose streaks fit a pupil of half-width pw, cached."""
+        r = self.iris_r
+        step = r * IRIS_STREAK_STEP
+        key = round(pw / step)
+        if key not in self._irises:
+            self._irises[key] = make_iris(r, key * step, r * PUPIL_SIZE[1])
+        return self._irises[key]
 
     def render(self, gaze, pupil, openness):
         """gaze: (x, y) in [-1, 1]; pupil: slit half-width as a fraction of
@@ -147,8 +184,8 @@ class CatEyes:
 
         layer = np.full((size, size, 3), SCLERA, np.uint8)
         ix, iy = c[0] + gaze[0] * rx * GAZE_RANGE[0], c[1] + gaze[1] * ry * GAZE_RANGE[1]
-        blend(layer, self.iris, self.iris_a, ix, iy)
         pw = max(2.0, r * pupil * PUPIL_SIZE[0])
+        blend(layer, *self._iris(pw), ix, iy)
         t = np.linspace(-1, 1, 61)
         side = pw * (1 - t * t) ** PUPIL_CURVE
         outline = np.concatenate([np.stack([ix + side, iy + t * r * PUPIL_SIZE[1]], 1),
